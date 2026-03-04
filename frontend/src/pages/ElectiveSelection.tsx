@@ -15,6 +15,7 @@ const ElectiveSelection = () => {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
+  const [deadline, setDeadline] = useState<string | null | undefined>(undefined);
   const [searchQuery, setSearchQuery] = useState("");
   const [electives, setElectives] = useState<ElectiveDto[]>([]);
   const [semesterFilter, setSemesterFilter] = useState<string>("");
@@ -36,6 +37,7 @@ const ElectiveSelection = () => {
           setSelected(ordered);
           setSubmitted(p.status === "submitted");
         }
+        setDeadline(p.deadline ?? null);
       })
       .catch(() => {});
   }, []);
@@ -55,7 +57,12 @@ const ElectiveSelection = () => {
   );
 
   const toggle = (id: string) => {
+    // Block changes if already submitted or deadline passed
     if (submitted) return;
+    if (deadline && new Date(deadline) < new Date()) {
+      toast.error("The preference deadline has passed. You can no longer change your selections.");
+      return;
+    }
     setSelected((prev) => {
       if (prev.includes(id)) return prev.filter((p) => p !== id);
       if (prev.length >= MAX_PREFS) {
@@ -69,6 +76,10 @@ const ElectiveSelection = () => {
   const handleCheckout = () => {
     if (selected.length < MIN_PREFS) {
       toast.error(`Select at least ${MIN_PREFS} preferences`);
+      return;
+    }
+    if (deadline && new Date(deadline) < new Date()) {
+      toast.error("The preference deadline has passed. You can no longer submit or edit preferences.");
       return;
     }
     getStudentProfile()
@@ -108,6 +119,14 @@ const ElectiveSelection = () => {
           <p className="text-muted-foreground mt-1 text-sm">
             Select {MIN_PREFS}–{MAX_PREFS} electives in order of preference ({selected.length}/{MAX_PREFS})
           </p>
+          {deadline && (
+            <p className="text-xs mt-1">
+              <span className="font-semibold text-foreground">Deadline:</span>{" "}
+              <span className={new Date(deadline) < new Date() ? "text-destructive" : "text-emerald-600"}>
+                {new Date(deadline).toLocaleString()}
+              </span>
+            </p>
+          )}
         </div>
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3 w-full md:w-auto">
           <div className="relative">

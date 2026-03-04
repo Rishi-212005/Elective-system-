@@ -68,6 +68,8 @@ const electiveSchema = z.object({
   department: z.string().optional(),
   seatLimit: z.number().int().min(1),
   semester: z.string().min(1),
+  // Optional preference deadline; sent as ISO string or omitted
+  preferenceDeadline: z.string().datetime().optional().or(z.literal("").transform(() => undefined)),
   isActive: z.boolean().optional().default(true),
 });
 
@@ -130,6 +132,7 @@ router.get("/students", async (_req, res) => {
       allocatedElectiveCode: allocatedElective?.code || null,
       roundAllocated: alloc?.roundAllocated ?? null,
       allocationStatus: alloc?.status ?? "pending",
+      submittedAt: p.submittedAt ?? null,
     };
   });
 

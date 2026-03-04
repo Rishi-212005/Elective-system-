@@ -24,6 +24,7 @@ export type StudentPreferencesResponse = {
   submittedAt?: string | null;
   updatedAt?: string | null;
   preferences: Array<{ electiveLegacyId: string; rank: number }>;
+  deadline?: string | null;
 };
 
 export type StudentAllocationResponse =

@@ -19,6 +19,7 @@ export type AdminElective = {
   semester?: string;
   requestedCount?: number;
   allocatedCount?: number;
+  preferenceDeadline?: string;
 };
 
 export type AdminStudentRow = {
@@ -34,6 +35,7 @@ export type AdminStudentRow = {
   allocatedElectiveCode: string | null;
   roundAllocated: number | null;
   allocationStatus: "allocated" | "unallocated" | "pending";
+  submittedAt?: string | null;
 };
 
 export type RunAllocationResponse = {

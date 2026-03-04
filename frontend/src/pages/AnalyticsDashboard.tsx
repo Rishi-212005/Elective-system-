@@ -53,6 +53,9 @@ function simulateAllocation(
   const sorted = [...students].sort((a, b) => {
     if (b.cgpa !== a.cgpa) return b.cgpa - a.cgpa;
     if (a.backlogs !== b.backlogs) return a.backlogs - b.backlogs;
+    const ta = a.submittedAt ? new Date(a.submittedAt).getTime() : 0;
+    const tb = b.submittedAt ? new Date(b.submittedAt).getTime() : 0;
+    if (ta !== tb) return ta - tb;
     const nameCmp = a.name.localeCompare(b.name);
     if (nameCmp !== 0) return nameCmp;
     return a.rollNumber.localeCompare(b.rollNumber);
@@ -268,7 +271,7 @@ const AnalyticsDashboard = () => {
               />
             </div>
             <div className="flex gap-1.5">
-              {[50, 70, 90, 100, 120].map((v) => (
+              {[20, 40, 60, 70, 80].map((v) => (
                 <button
                   key={v}
                   onClick={() => { setSeatLimit(v); setActiveRound(-1); }}

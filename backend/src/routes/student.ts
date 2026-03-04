@@ -99,13 +99,56 @@ router.put("/me/profile", async (req: AuthedRequest, res) => {
   }
 });
 
+async function getCurrentPreferenceDeadline(profile: {
+  department: string;
+  semester: number;
+}) {
+  // Find all electives for this semester that have a deadline set and take the latest
+  const electivesWithDeadline = await Elective.find({
+    semester: String(profile.semester),
+    preferenceDeadline: { $ne: null },
+    isActive: true,
+  })
+    .select("preferenceDeadline")
+    .lean();
+
+  if (!electivesWithDeadline.length) return null;
+  let latest = electivesWithDeadline[0].preferenceDeadline as Date;
+  for (const e of electivesWithDeadline) {
+    const d = e.preferenceDeadline as Date;
+    if (d && d.getTime() > latest.getTime()) latest = d;
+  }
+  return latest;
+}
+
 router.get("/me/preferences", async (req: AuthedRequest, res) => {
   const user = await User.findById(req.auth!.userId).select("_id username");
   if (!user) return res.status(404).json({ message: "User not found" });
 
-  const pref = await Preference.findOne({ studentUserId: user._id }).lean();
+  const profile = await StudentProfile.findOne({ userId: user._id }).select("department semester cgpa backlogs profileCompleted");
+  if (!profile) return res.status(404).json({ message: "Student profile not found" });
+
+  const pref = await Preference.findOne({ studentUserId: user._id });
   if (!pref) {
-    return res.json({ status: "none", preferences: [] });
+    return res.json({ status: "none", preferences: [], deadline: null });
+  }
+
+  const deadline = await getCurrentPreferenceDeadline({
+    department: profile.department,
+    semester: profile.semester,
+  });
+
+  // If deadline has passed and this is still a draft with enough prefs, auto-submit once
+  if (deadline && pref.status === "draft" && pref.preferences.length >= 3 && new Date() > deadline) {
+    pref.status = "submitted";
+    pref.submittedAt = pref.submittedAt ?? new Date();
+    pref.studentUsername = user.username;
+    pref.studentName = profile ? (profile as any).studentName || user.name : user.name;
+    pref.department = profile.department;
+    pref.semester = profile.semester;
+    pref.cgpa = profile.cgpa;
+    pref.backlogs = profile.backlogs ?? 0;
+    await pref.save();
   }
 
   return res.json({
@@ -113,6 +156,7 @@ router.get("/me/preferences", async (req: AuthedRequest, res) => {
     submittedAt: pref.submittedAt ?? null,
     preferences: pref.preferences,
     updatedAt: pref.updatedAt ?? null,
+    deadline: deadline,
   });
 });
 
@@ -133,9 +177,21 @@ router.put("/me/preferences", async (req: AuthedRequest, res) => {
   const user = await User.findById(req.auth!.userId).select("_id username name");
   if (!user) return res.status(404).json({ message: "User not found" });
 
-  const profile = await StudentProfile.findOne({ userId: user._id }).select("profileCompleted department semester cgpa backlogs");
+  const profile = await StudentProfile.findOne({ userId: user._id }).select(
+    "profileCompleted department semester cgpa backlogs"
+  );
   if (!profile) return res.status(404).json({ message: "Student profile not found" });
   if (!profile.profileCompleted) return res.status(400).json({ message: "Complete your profile before saving preferences" });
+
+  const deadline = await getCurrentPreferenceDeadline({
+    department: profile.department,
+    semester: profile.semester,
+  });
+  if (deadline && new Date() > deadline) {
+    return res
+      .status(400)
+      .json({ message: "Preference editing deadline has passed. You can no longer save or change preferences." });
+  }
 
   const data = upsertPreferencesSchema.parse(req.body);
 
@@ -185,9 +241,19 @@ router.post("/me/preferences/submit", async (req: AuthedRequest, res) => {
   const user = await User.findById(req.auth!.userId).select("_id username name");
   if (!user) return res.status(404).json({ message: "User not found" });
 
-  const profile = await StudentProfile.findOne({ userId: user._id }).select("profileCompleted department semester cgpa backlogs");
+  const profile = await StudentProfile.findOne({ userId: user._id }).select(
+    "profileCompleted department semester cgpa backlogs"
+  );
   if (!profile) return res.status(404).json({ message: "Student profile not found" });
   if (!profile.profileCompleted) return res.status(400).json({ message: "Complete your profile before submitting preferences" });
+
+  const deadline = await getCurrentPreferenceDeadline({
+    department: profile.department,
+    semester: profile.semester,
+  });
+  if (deadline && new Date() > deadline) {
+    return res.status(400).json({ message: "Preference submission deadline has passed." });
+  }
 
   const pref = await Preference.findOne({ studentUserId: user._id });
   if (!pref) return res.status(400).json({ message: "No preferences saved" });

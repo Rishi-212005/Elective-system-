@@ -49,6 +49,8 @@ const AdminDashboard = () => {
             remainingSeats: Math.max(e.seatLimit - (e.allocatedCount ?? 0), 0),
             description: "",
             semester: e.semester || "3-1",
+            // carry through requestedCount for charts
+            requestedCount: e.requestedCount ?? 0,
           }))
         )
       )

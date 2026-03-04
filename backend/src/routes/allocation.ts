@@ -8,13 +8,10 @@ const router = Router();
 router.use(requireAuth, requireRole("admin"));
 
 // POST /allocation/run-allocation
+// Runs the allocation engine. Announced students are protected inside the service
+// and are never modified; only unannounced / new students are considered.
 router.post("/run-allocation", async (_req: AuthedRequest, res) => {
   try {
-    const alreadyAnnounced = await Allocation.exists({ announced: true });
-    if (alreadyAnnounced) {
-      return res.status(400).json({ message: "Results have already been announced. Allocation cannot be re-run." });
-    }
-
     const result = await runAllocationEngine();
     return res.json(result);
   } catch (err) {
@@ -24,7 +21,7 @@ router.post("/run-allocation", async (_req: AuthedRequest, res) => {
   }
 });
 
-// POST /allocation/announce - mark all allocations as announced
+// POST /allocation/announce - mark all current unannounced allocations as announced
 router.post("/announce", async (_req: AuthedRequest, res) => {
   try {
     const now = new Date();

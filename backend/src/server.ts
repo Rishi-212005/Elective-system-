@@ -6,6 +6,7 @@ import app from "./app";
 import { ensureElectivesSeeded } from "./seed/electivesSeed";
 import { ensureValidatorsCompatible } from "./seed/migrateValidators";
 import { ensureDefaultAdmin } from "./seed/adminSeed";
+import { ensureDefaultMentor } from "./seed/mentorSeed";
 
 const PORT = process.env.PORT || 4000;
 const MONGO_URI = process.env.MONGO_URI;
@@ -22,6 +23,7 @@ async function start() {
   await ensureValidatorsCompatible();
   await ensureElectivesSeeded();
   await ensureDefaultAdmin();
+  await ensureDefaultMentor();
 
   app.listen(PORT, () => {
     // eslint-disable-next-line no-console

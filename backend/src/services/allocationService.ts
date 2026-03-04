@@ -11,27 +11,73 @@ type AllocationResult = {
 };
 
 export async function runAllocationEngine(): Promise<AllocationResult> {
-  // Fetch submitted preferences (each document is one student snapshot)
-  const prefs = await Preference.find({ status: "submitted" }).lean();
+  // 1. Fetch existing announced allocations – these students are locked and excluded from new runs
+  const announcedAllocations = await Allocation.find({ announced: true })
+    .select("studentUserId electiveLegacyId studentUsername")
+    .lean();
 
-  if (prefs.length === 0) {
-    return { allocatedStudents: [], unallocatedStudents: [], seatUtilization: [], rounds: [] };
+  const announcedStudentUserIds = new Set<string>();
+  const announcedByElective = new Map<string, number>();
+
+  for (const a of announcedAllocations) {
+    const studentId = (a.studentUserId as Types.ObjectId).toString();
+    announcedStudentUserIds.add(studentId);
+    if (a.electiveLegacyId) {
+      announcedByElective.set(a.electiveLegacyId, (announcedByElective.get(a.electiveLegacyId) ?? 0) + 1);
+    }
   }
 
-  // Fetch electives and build capacity map
+  // 2. Fetch electives and initialise capacity map, subtracting seats already taken by announced students
   const electives = await Elective.find({ isActive: true }).lean();
   const capacityByLegacyId = new Map<string, number>();
+  const electiveByLegacyId = new Map<string, (typeof electives)[number]>();
+
   electives.forEach((e) => {
-    capacityByLegacyId.set(e.legacyId, e.seatLimit);
+    electiveByLegacyId.set(e.legacyId, e);
+    const alreadyTaken = announcedByElective.get(e.legacyId) ?? 0;
+    const remaining = Math.max(e.seatLimit - alreadyTaken, 0);
+    capacityByLegacyId.set(e.legacyId, remaining);
   });
 
-  // Pre-sort students by priority
+  // 3. Fetch submitted preferences only for students who do NOT yet have an announced allocation
+  const prefs = await Preference.find({
+    status: "submitted",
+    studentUserId: { $nin: Array.from(announcedStudentUserIds).map((id) => new Types.ObjectId(id)) },
+  }).lean();
+
+  // If there are no new/pending students, still return current seat utilisation (based on announced only)
+  if (prefs.length === 0) {
+    const seatUtilizationOnly = electives.map((e) => {
+      const remaining = capacityByLegacyId.get(e.legacyId) ?? e.seatLimit;
+      const filled = e.seatLimit - remaining;
+      return { elective: e.name, filled, capacity: e.seatLimit };
+    });
+    return { allocatedStudents: [], unallocatedStudents: [], seatUtilization: seatUtilizationOnly, rounds: [] };
+  }
+
+  // 4. Pre-sort students by priority and enforce semester-wise separation
   const students = prefs
     .map((p) => {
       const timestamp =
         (p.submittedAt instanceof Date ? p.submittedAt.getTime() : undefined) ??
         (p.updatedAt instanceof Date ? p.updatedAt.getTime() : undefined) ??
         (p.createdAt instanceof Date ? p.createdAt.getTime() : Date.now());
+
+      const semester = (p as any).semester as number | undefined;
+
+      // Build the ordered preference list, filtered to electives that match the student's semester (if set)
+      const orderedPrefs = p.preferences.slice().sort((a, b) => a.rank - b.rank);
+      const filteredPreferenceIds: string[] = [];
+      for (const pref of orderedPrefs) {
+        const elective = electiveByLegacyId.get(pref.electiveLegacyId as string);
+        if (!elective) continue;
+        if (semester != null && elective.semester) {
+          if (String(semester) !== elective.semester) {
+            continue;
+          }
+        }
+        filteredPreferenceIds.push(pref.electiveLegacyId as string);
+      }
 
       return {
         prefId: p._id as Types.ObjectId,
@@ -41,10 +87,8 @@ export async function runAllocationEngine(): Promise<AllocationResult> {
         cgpa: p.cgpa as number,
         backlogs: (p as any).backlogs ?? 0,
         timestamp,
-        preferences: p.preferences
-          .slice()
-          .sort((a, b) => a.rank - b.rank)
-          .map((x) => x.electiveLegacyId as string),
+        semester,
+        preferences: filteredPreferenceIds,
       };
     })
     // basic validations: CGPA range, at least 3 prefs, no duplicates
@@ -56,7 +100,7 @@ export async function runAllocationEngine(): Promise<AllocationResult> {
       }
       if (!s.preferences || s.preferences.length < 3) {
         // eslint-disable-next-line no-console
-        console.warn("Skipping student due to insufficient preferences", s.studentId);
+        console.warn("Skipping student due to insufficient preferences (after semester filter)", s.studentId);
         return false;
       }
       const set = new Set(s.preferences);
@@ -68,6 +112,7 @@ export async function runAllocationEngine(): Promise<AllocationResult> {
       return true;
     });
 
+  // Sort by CGPA, backlogs, timestamp, then name
   students.sort((a, b) => {
     if (b.cgpa !== a.cgpa) return b.cgpa - a.cgpa; // higher CGPA first
     if (a.backlogs !== b.backlogs) return a.backlogs - b.backlogs; // fewer backlogs first
@@ -101,7 +146,7 @@ export async function runAllocationEngine(): Promise<AllocationResult> {
 
       const capacity = capacityByLegacyId.get(electiveId);
       if (!capacity || capacity <= 0) {
-        // no capacity or elective unknown
+        // no capacity or elective unknown / full
         // eslint-disable-next-line no-console
         console.log(`    No seats left in ${electiveId}`);
         continue;

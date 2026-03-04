@@ -9,6 +9,8 @@ const electiveSchema = new Schema(
     department: { type: String },
     seatLimit: { type: Number, required: true, default: 70, min: 1 },
     semester: { type: String },
+    // Deadline until which students can edit/submit preferences
+    preferenceDeadline: { type: Date },
     isActive: { type: Boolean, default: true },
   },
   { timestamps: true }

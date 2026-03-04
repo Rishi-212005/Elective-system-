@@ -6,6 +6,7 @@ import studentRouter from "./routes/student";
 import electivesRouter from "./routes/electives";
 import adminRouter from "./routes/admin";
 import allocationRouter from "./routes/allocation";
+import facultyRouter from "./routes/faculty";
 
 const app = express();
 
@@ -21,6 +22,7 @@ app.use("/student", studentRouter);
 app.use("/electives", electivesRouter);
 app.use("/admin", adminRouter);
 app.use("/allocation", allocationRouter);
+app.use("/faculty", facultyRouter);
 
 export default app;
 

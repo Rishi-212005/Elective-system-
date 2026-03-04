@@ -13,7 +13,14 @@ const AdminElectives = () => {
   const [search, setSearch] = useState("");
   const [semesterFilter, setSemesterFilter] = useState("");
   const [form, setForm] = useState({
-    code: "", name: "", faculty: "", department: "", totalSeats: 70, description: "", semester: "3-1",
+    code: "",
+    name: "",
+    faculty: "",
+    department: "",
+    totalSeats: 70,
+    description: "",
+    semester: "3-1",
+    preferenceDeadline: "", // ISO string or empty
   });
 
   useEffect(() => {
@@ -27,10 +34,12 @@ const AdminElectives = () => {
             faculty: e.facultyName || "",
             department: e.department || "",
             totalSeats: e.seatLimit,
-            remainingSeats: e.seatLimit,
+            remainingSeats: Math.max(e.seatLimit - (e.allocatedCount ?? 0), 0),
             description: "",
             semester: e.semester || "3-1",
-          }))
+            // Store deadline as a human-readable string if present
+            preferenceDeadline: e.preferenceDeadline || "",
+          })) as any
         )
       )
       .catch(() => setElectivesList([]));
@@ -46,13 +55,32 @@ const AdminElectives = () => {
 
   const openAdd = () => {
     setEditingId(null);
-    setForm({ code: "", name: "", faculty: "", department: "", totalSeats: 70, description: "", semester: "3-1" });
+    setForm({
+      code: "",
+      name: "",
+      faculty: "",
+      department: "",
+      totalSeats: 70,
+      description: "",
+      semester: "3-1",
+      preferenceDeadline: "",
+    });
     setShowModal(true);
   };
 
   const openEdit = (e: Elective) => {
     setEditingId(e.id);
-    setForm({ code: e.code, name: e.name, faculty: e.faculty, department: e.department, totalSeats: e.totalSeats, description: e.description, semester: e.semester });
+    setForm({
+      code: e.code,
+      name: e.name,
+      faculty: e.faculty,
+      department: e.department,
+      totalSeats: e.totalSeats,
+      description: e.description,
+      semester: e.semester,
+      // Convert stored ISO/string to datetime-local compatible value if present
+      preferenceDeadline: (e as any).preferenceDeadline || "",
+    });
     setShowModal(true);
   };
 
@@ -61,14 +89,18 @@ const AdminElectives = () => {
     if (editingId) {
       const target = electivesList.find((e) => e.id === editingId);
       if (!target) return;
-      updateAdminElective(target.id, {
+      const payload: any = {
         code: form.code,
         name: form.name,
         facultyName: form.faculty,
         department: form.department,
         seatLimit: form.totalSeats,
         semester: form.semester,
-      })
+      };
+      if (form.preferenceDeadline) {
+        payload.preferenceDeadline = new Date(form.preferenceDeadline).toISOString();
+      }
+      updateAdminElective(target.id, payload)
         .then((updated) => {
           setElectivesList((prev) =>
             prev.map((e) =>
@@ -80,9 +112,11 @@ const AdminElectives = () => {
                     faculty: updated.facultyName || "",
                     department: updated.department || "",
                     totalSeats: updated.seatLimit,
-                    remainingSeats: updated.seatLimit,
+                    remainingSeats: Math.max(updated.seatLimit - ((updated as any).allocatedCount ?? 0), 0),
                     description: "",
-                  }
+                    semester: updated.semester || "3-1",
+                    preferenceDeadline: (updated as any).preferenceDeadline || "",
+                  } as any
                 : e
             )
           );
@@ -90,7 +124,7 @@ const AdminElectives = () => {
         })
         .catch((e: any) => toast.error(e?.message || "Failed to update elective"));
     } else {
-      createAdminElective({
+      const payload: any = {
         legacyId: String(Date.now()),
         code: form.code,
         name: form.name,
@@ -98,20 +132,26 @@ const AdminElectives = () => {
         department: form.department,
         seatLimit: form.totalSeats,
         semester: form.semester,
-      })
+      };
+      if (form.preferenceDeadline) {
+        payload.preferenceDeadline = new Date(form.preferenceDeadline).toISOString();
+      }
+      createAdminElective(payload)
         .then((created) => {
           setElectivesList((prev) => [
             ...prev,
-            {
-              id: created.legacyId,
-              code: created.code,
-              name: created.name,
-              faculty: created.facultyName || "",
-              department: created.department || "",
-              totalSeats: created.seatLimit,
-              remainingSeats: created.seatLimit,
-              description: "",
-            },
+              {
+                id: created.legacyId,
+                code: created.code,
+                name: created.name,
+                faculty: created.facultyName || "",
+                department: created.department || "",
+                totalSeats: created.seatLimit,
+                remainingSeats: created.seatLimit,
+                description: "",
+                semester: created.semester || "3-1",
+                preferenceDeadline: (created as any).preferenceDeadline || "",
+              } as any,
           ]);
           toast.success("Elective added!");
         })
@@ -244,6 +284,18 @@ const AdminElectives = () => {
                     <label className="block text-xs font-semibold text-foreground mb-1.5">Total Seats</label>
                     <input type="number" value={form.totalSeats} onChange={(e) => setForm((prev) => ({ ...prev, totalSeats: Number(e.target.value) }))} className="input-field" />
                   </div>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-foreground mb-1.5">Preference Deadline</label>
+                  <input
+                    type="datetime-local"
+                    value={form.preferenceDeadline}
+                    onChange={(e) => setForm((prev) => ({ ...prev, preferenceDeadline: e.target.value }))}
+                    className="input-field"
+                  />
+                  <p className="text-[10px] text-muted-foreground mt-1">
+                    After this time, students can no longer edit preferences; last draft will be auto-submitted.
+                  </p>
                 </div>
               </div>
               <div className="flex gap-3 p-5 pt-0">

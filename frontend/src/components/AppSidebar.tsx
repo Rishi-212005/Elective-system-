@@ -53,9 +53,7 @@ const adminNav: NavItem[] = [
 
 const facultyNav: NavItem[] = [
   { title: "Dashboard", url: "/dashboard/faculty", icon: LayoutDashboard },
-  { title: "My Elective", url: "/dashboard/faculty", icon: BookOpen },
-  { title: "Students", url: "/dashboard/faculty", icon: Users },
-  { title: "Profile", url: "/dashboard/faculty", icon: User },
+  { title: "Allocated Students", url: "/dashboard/faculty/allocated", icon: Users },
 ];
 
 const getNavItems = (role: UserRole): NavItem[] => {

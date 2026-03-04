@@ -13,6 +13,8 @@ const PreferenceCheckout = () => {
   const selectedIds: string[] = location.state?.selected || [];
   const [electives, setElectives] = useState<ElectiveDto[]>([]);
   const [resolvedSelected, setResolvedSelected] = useState<string[]>(selectedIds);
+  const [deadline, setDeadline] = useState<string | null | undefined>(undefined);
+  const [status, setStatus] = useState<"none" | "draft" | "submitted">("none");
 
   useEffect(() => {
     getElectives().then(setElectives).catch(() => setElectives([]));
@@ -20,10 +22,20 @@ const PreferenceCheckout = () => {
     if (!selectedIds || selectedIds.length === 0) {
       getStudentPreferences()
         .then((p) => {
+          setStatus(p.status);
+          setDeadline(p.deadline ?? null);
           if (p.status !== "none") {
             const ordered = p.preferences.slice().sort((a, b) => a.rank - b.rank).map((x) => x.electiveLegacyId);
             setResolvedSelected(ordered);
           }
+        })
+        .catch(() => {});
+    } else {
+      // still fetch deadline/status for cases coming from selection page
+      getStudentPreferences()
+        .then((p) => {
+          setStatus(p.status);
+          setDeadline(p.deadline ?? null);
         })
         .catch(() => {});
     }
@@ -35,6 +47,10 @@ const PreferenceCheckout = () => {
   );
 
   const handleSave = async () => {
+    if (deadline && new Date(deadline) < new Date()) {
+      toast.error("The preference deadline has passed. You can no longer save or change your draft.");
+      return;
+    }
     try {
       const profile = await getStudentProfile();
       if (!profile.profile.profileCompleted) {
@@ -50,6 +66,10 @@ const PreferenceCheckout = () => {
   };
 
   const handleSubmit = async () => {
+    if (deadline && new Date(deadline) < new Date()) {
+      toast.error("The preference deadline has passed. You can no longer submit preferences.");
+      return;
+    }
     try {
       const profile = await getStudentProfile();
       if (!profile.profile.profileCompleted) {
@@ -99,6 +119,15 @@ const PreferenceCheckout = () => {
         <p className="text-sm text-muted-foreground">
           You have selected <strong className="text-foreground">{selectedElectives.length}</strong> elective(s). Review the details below before saving or submitting.
         </p>
+        {deadline && (
+          <p className="text-xs mt-1">
+            <span className="font-semibold text-foreground">Deadline:</span>{" "}
+            <span className={new Date(deadline) < new Date() ? "text-destructive" : "text-emerald-600"}>
+              {new Date(deadline).toLocaleString()}
+            </span>{" "}
+            {new Date(deadline) < new Date() && "· Editing is now locked."}
+          </p>
+        )}
       </motion.div>
 
       {/* Preference List */}
@@ -158,7 +187,15 @@ const PreferenceCheckout = () => {
           </div>
           <div>
             <span className="text-xs text-muted-foreground block">Status</span>
-            <span className="font-bold text-warning">Pending Review</span>
+            <span className="font-bold">
+              {status === "submitted" ? (
+                <span className="text-emerald-600">Submitted</span>
+              ) : deadline && new Date(deadline) < new Date() ? (
+                <span className="text-destructive">Locked</span>
+              ) : (
+                <span className="text-warning">Pending Review</span>
+              )}
+            </span>
           </div>
         </div>
       </motion.div>
