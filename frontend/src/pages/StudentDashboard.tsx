@@ -7,6 +7,7 @@ import StatCard from "@/components/StatCard";
 import { useAuth } from "@/context/AuthContext";
 import { getElectives, type ElectiveDto } from "@/api/electives";
 import { getStudentAllocation, getStudentPreferences } from "@/api/student";
+import AIRecommendationPanel from "@/components/AIRecommendationPanel"; // AI feature – added
 
 const MIN_PREFS = 3;
 const MAX_PREFS = 10;
@@ -29,7 +30,7 @@ const StudentDashboard = () => {
           setSubmitted(p.status === "submitted");
         }
       })
-      .catch(() => {});
+      .catch(() => { });
     getStudentAllocation().then(setAllocation).catch(() => setAllocation({ announced: false }));
   }, []);
 
@@ -109,28 +110,8 @@ const StudentDashboard = () => {
         </motion.div>
       )}
 
-      {/* AI Recommendation */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.2 }}
-        className="glass-card-elevated p-4 sm:p-6 mb-6 sm:mb-8"
-      >
-        <div className="flex items-center gap-3 mb-3 sm:mb-4">
-          <div className="w-8 sm:w-9 h-8 sm:h-9 rounded-xl bg-secondary/10 flex items-center justify-center">
-            <Brain size={18} className="text-secondary" />
-          </div>
-          <div>
-            <h3 className="font-display font-bold text-foreground text-sm sm:text-base">AI Recommendation</h3>
-            <p className="text-xs text-muted-foreground">Based on your CGPA and past performance</p>
-          </div>
-        </div>
-        <div className="flex flex-wrap gap-2">
-          {["Machine Learning", "Cloud Computing", "NLP"].map((name, i) => (
-            <span key={i} className="badge-primary px-3 py-1.5 text-xs font-medium">{name}</span>
-          ))}
-        </div>
-      </motion.div>
+      {/* AI Recommendation – replaced static placeholder with live AIRecommendationPanel */}
+      <AIRecommendationPanel />
 
       {/* Preferences Overview */}
       <motion.div

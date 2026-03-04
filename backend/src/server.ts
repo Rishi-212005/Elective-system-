@@ -9,11 +9,10 @@ import { ensureDefaultAdmin } from "./seed/adminSeed";
 import { ensureDefaultMentor } from "./seed/mentorSeed";
 
 const PORT = process.env.PORT || 4000;
-const MONGO_URI = process.env.MONGO_URI;
-
-if (!MONGO_URI) {
-  throw new Error("MONGO_URI is not set. Define it in your .env file.");
-}
+const MONGO_URI: string = process.env.MONGO_URI!;
+// if (!MONGO_URI) {
+//   throw new Error("MONGO_URI is not set. Define it in your .env file.");
+// }
 
 async function start() {
   await mongoose.connect(MONGO_URI);

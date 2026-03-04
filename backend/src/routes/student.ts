@@ -93,7 +93,7 @@ router.put("/me/profile", async (req: AuthedRequest, res) => {
     // eslint-disable-next-line no-console
     console.error("PUT /student/me/profile error:", err);
     if (err instanceof z.ZodError) {
-      return res.status(400).json({ message: err.errors?.[0]?.message || "Invalid profile data" });
+      return res.status(400).json({ message: err.issues?.[0]?.message || "Invalid profile data" });
     }
     return res.status(500).json({ message: "Failed to save profile" });
   }
