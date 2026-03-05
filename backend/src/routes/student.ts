@@ -178,6 +178,21 @@ function hasDuplicates<T>(arr: T[]) {
   return new Set(arr as any).size !== arr.length;
 }
 
+function normalizeDepartment(input: unknown) {
+  const raw = String(input ?? "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw === "cse" || raw.includes("computer")) return "cse";
+  if (raw === "ece" || raw.includes("electronic")) return "ece";
+  if (raw === "eee" || raw.includes("electrical")) return "eee";
+  if (raw === "me" || raw.includes("mechan")) return "me";
+  if (raw === "civil" || raw === "ce" || raw.includes("civil")) return "civil";
+  if (raw === "chem" || raw.includes("chem")) return "chem";
+  if (raw === "phy" || raw.includes("phys")) return "phy";
+  if (raw === "math" || raw.includes("mathemat")) return "math";
+  if (raw === "hss" || raw.includes("english") || raw.includes("human")) return "hss";
+  return raw;
+}
+
 router.put("/me/preferences", async (req: AuthedRequest, res) => {
   const user = await User.findById(req.auth!.userId).select("_id username name");
   if (!user) return res.status(404).json({ message: "User not found" });
@@ -212,9 +227,20 @@ router.put("/me/preferences", async (req: AuthedRequest, res) => {
   if (hasDuplicates(ranks)) return res.status(400).json({ message: "Duplicate ranks are not allowed" });
 
   // Validate electives exist and are active
-  const electives = await Elective.find({ legacyId: { $in: electiveLegacyIds }, isActive: true }).select("legacyId");
+  const electives = await Elective.find({ legacyId: { $in: electiveLegacyIds }, isActive: true }).select(
+    "legacyId department"
+  );
   if (electives.length !== electiveLegacyIds.length) {
     return res.status(400).json({ message: "One or more electives are invalid/inactive" });
+  }
+
+  // Rule: students cannot choose electives offered by their own department
+  const studentDept = normalizeDepartment(profile.department);
+  for (const e of electives as any[]) {
+    const electiveDept = normalizeDepartment(e.department);
+    if (studentDept && electiveDept && studentDept === electiveDept) {
+      return res.status(400).json({ message: "You cannot choose electives offered by your own department." });
+    }
   }
 
   const next = data.preferences
@@ -275,6 +301,19 @@ router.post("/me/preferences/submit", async (req: AuthedRequest, res) => {
 
   if (!pref.preferences || pref.preferences.length < 3) {
     return res.status(400).json({ message: "Minimum 3 preferences required" });
+  }
+
+  // Enforce same-department restriction at submit-time too (in case electives changed after draft save)
+  const electiveLegacyIds = pref.preferences.map((p: any) => p.electiveLegacyId as string);
+  const electives = await Elective.find({ legacyId: { $in: electiveLegacyIds }, isActive: true }).select(
+    "legacyId department"
+  );
+  const studentDept = normalizeDepartment(profile.department);
+  for (const e of electives as any[]) {
+    const electiveDept = normalizeDepartment(e.department);
+    if (studentDept && electiveDept && studentDept === electiveDept) {
+      return res.status(400).json({ message: "You cannot submit preferences that include electives from your own department." });
+    }
   }
 
   // allow editing before deadline; for now keep it always submit-able, but one record per student

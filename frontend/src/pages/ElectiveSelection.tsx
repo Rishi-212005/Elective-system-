@@ -11,6 +11,21 @@ import { getStudentPreferences, getStudentProfile, saveStudentPreferences } from
 const MIN_PREFS = 3;
 const MAX_PREFS = 10;
 
+function normalizeDepartment(input: unknown) {
+  const raw = String(input ?? "").trim().toLowerCase();
+  if (!raw) return "";
+  if (raw === "cse" || raw.includes("computer")) return "cse";
+  if (raw === "ece" || raw.includes("electronic")) return "ece";
+  if (raw === "eee" || raw.includes("electrical")) return "eee";
+  if (raw === "me" || raw.includes("mechan")) return "me";
+  if (raw === "civil" || raw === "ce" || raw.includes("civil")) return "civil";
+  if (raw === "chem" || raw.includes("chem")) return "chem";
+  if (raw === "phy" || raw.includes("phys")) return "phy";
+  if (raw === "math" || raw.includes("mathemat")) return "math";
+  if (raw === "hss" || raw.includes("english") || raw.includes("human")) return "hss";
+  return raw;
+}
+
 const ElectiveSelection = () => {
   const navigate = useNavigate();
   const [selected, setSelected] = useState<string[]>([]);
@@ -20,6 +35,7 @@ const ElectiveSelection = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [electives, setElectives] = useState<ElectiveDto[]>([]);
   const [semesterFilter, setSemesterFilter] = useState<string>("");
+  const [studentDept, setStudentDept] = useState<string>("");
 
   useEffect(() => {
     getElectives()
@@ -31,6 +47,9 @@ const ElectiveSelection = () => {
         }
       })
       .catch(() => setElectives([]));
+    getStudentProfile()
+      .then((p) => setStudentDept((p.profile.department || "").trim()))
+      .catch(() => setStudentDept(""));
     getStudentPreferences()
       .then((p) => {
         if (p.status !== "none") {
@@ -47,6 +66,9 @@ const ElectiveSelection = () => {
   const filtered = useMemo(
     () =>
       electives.filter((e) => {
+        if (normalizeDepartment(studentDept) && normalizeDepartment(e.department) === normalizeDepartment(studentDept)) {
+          return false;
+        }
         if (semesterFilter && e.semester && e.semester !== semesterFilter) return false;
         const q = searchQuery.toLowerCase();
         return (
@@ -55,7 +77,7 @@ const ElectiveSelection = () => {
           (e.facultyName || "").toLowerCase().includes(q)
         );
       }),
-    [electives, searchQuery, semesterFilter]
+    [electives, searchQuery, semesterFilter, studentDept]
   );
 
   const toggle = (id: string) => {

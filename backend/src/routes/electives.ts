@@ -5,7 +5,7 @@ const router = Router();
 
 router.get("/", async (_req, res) => {
   const electives = await Elective.find({ isActive: true })
-    .select("legacyId code name facultyName department seatLimit")
+    .select("legacyId code name facultyName department seatLimit semester")
     .sort({ code: 1 })
     .lean();
   return res.json(electives);

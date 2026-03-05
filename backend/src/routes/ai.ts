@@ -11,6 +11,7 @@
 
 import { Router, Request, Response } from "express";
 import OpenAI from "openai";
+import { Elective } from "../models/Elective";
 
 const router = Router();
 
@@ -54,10 +55,21 @@ router.post("/recommend", async (req: Request, res: Response) => {
         }
 
         // ── Structured prompt for elective recommendations ──
+        const electives = await Elective.find({ isActive: true })
+            .select("code name department")
+            .sort({ code: 1 })
+            .lean();
+
+        const availableList = electives
+            .map((e) => `- ${e.name} (${e.department || "Dept N/A"}) [${e.code}]`)
+            .join("\n");
+
         const prompt = `
 You are an academic advisor for an Indian engineering college. A student has a CGPA of ${cgpaNum.toFixed(2)} (on a 10-point scale).
 
 Based on their CGPA, recommend the 5 best open elective subjects they are most suitable for.
+You MUST choose ONLY from the following available electives list (do not invent new subjects):
+${availableList}
 
 Return ONLY a valid JSON array (no markdown, no extra text) in this exact format:
 [
@@ -70,9 +82,8 @@ Return ONLY a valid JSON array (no markdown, no extra text) in this exact format
 ]
 
 Rules:
-- Students with CGPA 8.5–10 can handle Hard subjects (AI, ML, Deep Learning, Cloud, Blockchain).
-- Students with CGPA 7–8.4 are best suited for Medium subjects (Data Analytics, IoT, Cybersecurity, NLP).
-- Students with CGPA below 7 do best with Easy / Medium subjects (Web Dev, Mobile App Dev, Digital Marketing, UI/UX).
+- You MUST pick subjects exactly as named in the available electives list.
+- Students with CGPA 8.5–10 can handle Hard subjects; 7–8.4 are best suited for Medium; below 7 do best with Easy / Medium.
 - Probability should reflect how likely the student is to be allotted the subject given competition vs their CGPA.
 - Keep explanations concise and encouraging.
 `;
@@ -140,9 +151,15 @@ router.post("/explain", async (req: Request, res: Response) => {
             return res.status(400).json({ message: "subject name is required" });
         }
 
+        const subjectTrimmed = subject.trim();
+        const exists = await Elective.findOne({ isActive: true, name: subjectTrimmed }).select("_id").lean();
+        if (!exists) {
+            return res.status(400).json({ message: "Unknown elective subject. Please choose a subject from the electives list." });
+        }
+
         // ── Structured prompt for subject explanation ──
         const prompt = `
-You are an expert academic advisor. Explain the open elective subject "${subject.trim()}" for an engineering student.
+You are an expert academic advisor. Explain the open elective subject "${subjectTrimmed}" for an engineering student.
 
 Return ONLY a valid JSON object (no markdown, no extra text) in this exact format:
 {
