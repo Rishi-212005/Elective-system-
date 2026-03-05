@@ -14,16 +14,19 @@ import OpenAI from "openai";
 
 const router = Router();
 
-// Initialize the OpenAI client – uses OpenRouter base URL from .env
-const openai = new OpenAI({
-    apiKey: process.env.OPENAI_API_KEY,
-    baseURL: process.env.OPENAI_BASE_URL ?? "https://openrouter.ai/api/v1",
-    defaultHeaders: {
-        // OpenRouter recommends setting these headers
-        "HTTP-Referer": "http://localhost:4000",
-        "X-Title": "Smart Open Elective System",
-    },
-});
+/** Lazy OpenAI client – only created when OPENAI_API_KEY is set. Server can start without it. */
+function getOpenAI(): OpenAI | null {
+    const key = process.env.OPENAI_API_KEY;
+    if (!key || key.trim() === "") return null;
+    return new OpenAI({
+        apiKey: key,
+        baseURL: process.env.OPENAI_BASE_URL ?? "https://openrouter.ai/api/v1",
+        defaultHeaders: {
+            "HTTP-Referer": "http://localhost:4000",
+            "X-Title": "Smart Open Elective System",
+        },
+    });
+}
 
 // ─────────────────────────────────────────────────────────────────────────────
 // POST /ai/recommend
@@ -32,6 +35,13 @@ const openai = new OpenAI({
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/recommend", async (req: Request, res: Response) => {
     try {
+        const openai = getOpenAI();
+        if (!openai) {
+            return res.status(503).json({
+                message: "AI is not configured. Set OPENAI_API_KEY in backend/.env to enable recommendations.",
+            });
+        }
+
         const { cgpa } = req.body;
 
         // Basic validation
@@ -117,6 +127,13 @@ Rules:
 // ─────────────────────────────────────────────────────────────────────────────
 router.post("/explain", async (req: Request, res: Response) => {
     try {
+        const openai = getOpenAI();
+        if (!openai) {
+            return res.status(503).json({
+                message: "AI is not configured. Set OPENAI_API_KEY in backend/.env to enable explanations.",
+            });
+        }
+
         const { subject } = req.body;
 
         if (!subject || typeof subject !== "string" || subject.trim().length === 0) {

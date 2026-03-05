@@ -14,8 +14,10 @@ import AdminElectives from "./pages/AdminElectives";
 import AdminStudents from "./pages/AdminStudents";
 import AdminAllocation from "./pages/AdminAllocation";
 import AdminAllocatedStudents from "./pages/AdminAllocatedStudents";
+import AdminCgpaVerification from "./pages/AdminCgpaVerification";
 import FacultyDashboard from "./pages/FacultyDashboard";
 import FacultyAllocatedStudents from "./pages/FacultyAllocatedStudents";
+import FacultyFlaggedStudents from "./pages/FacultyFlaggedStudents";
 import ElectiveSelection from "./pages/ElectiveSelection";
 import PreferenceCheckout from "./pages/PreferenceCheckout";
 import AllocationResult from "./pages/AllocationResult";
@@ -42,9 +44,11 @@ const AppRoutes = () => (
     <Route path="/admin/electives" element={<ProtectedRoute role="admin"><AdminElectives /></ProtectedRoute>} />
     <Route path="/admin/students" element={<ProtectedRoute role="admin"><AdminStudents /></ProtectedRoute>} />
     <Route path="/admin/allocated-students" element={<ProtectedRoute role="admin"><AdminAllocatedStudents /></ProtectedRoute>} />
+    <Route path="/admin/cgpa-verification" element={<ProtectedRoute role="admin"><AdminCgpaVerification /></ProtectedRoute>} />
     <Route path="/admin/allocation" element={<ProtectedRoute role="admin"><AdminAllocation /></ProtectedRoute>} />
     <Route path="/dashboard/faculty" element={<ProtectedRoute role="faculty"><FacultyDashboard /></ProtectedRoute>} />
     <Route path="/dashboard/faculty/allocated" element={<ProtectedRoute role="faculty"><FacultyAllocatedStudents /></ProtectedRoute>} />
+    <Route path="/dashboard/faculty/flags" element={<ProtectedRoute role="faculty"><FacultyFlaggedStudents /></ProtectedRoute>} />
     <Route path="/elective-selection" element={<ProtectedRoute role="student"><ElectiveSelection /></ProtectedRoute>} />
     <Route path="/preference-checkout" element={<ProtectedRoute role="student"><PreferenceCheckout /></ProtectedRoute>} />
     <Route path="/allocation-result" element={<ProtectedRoute role="student"><AllocationResult /></ProtectedRoute>} />

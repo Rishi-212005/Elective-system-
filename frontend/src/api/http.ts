@@ -66,7 +66,17 @@ export async function apiFetch<T>(
     if (token) headers.set("Authorization", `Bearer ${token}`);
   }
 
-  const res = await fetch(url, { ...init, headers });
+  let res: Response;
+  try {
+    res = await fetch(url, { ...init, headers });
+  } catch (e: any) {
+    // Network error (backend down, CORS, wrong URL, etc.)
+    const msg =
+      e?.message === "Failed to fetch"
+        ? "Cannot reach server. Make sure the backend is running at " + API_BASE_URL
+        : e?.message || "Network error";
+    throw { message: msg };
+  }
   if (!res.ok) throw await parseError(res);
 
   // Handle empty responses

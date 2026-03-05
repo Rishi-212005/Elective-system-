@@ -16,6 +16,7 @@ const ElectiveSelection = () => {
   const [selected, setSelected] = useState<string[]>([]);
   const [submitted, setSubmitted] = useState(false);
   const [deadline, setDeadline] = useState<string | null | undefined>(undefined);
+  const [preferenceLocked, setPreferenceLocked] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [electives, setElectives] = useState<ElectiveDto[]>([]);
   const [semesterFilter, setSemesterFilter] = useState<string>("");
@@ -38,6 +39,7 @@ const ElectiveSelection = () => {
           setSubmitted(p.status === "submitted");
         }
         setDeadline(p.deadline ?? null);
+        setPreferenceLocked(!!p.preferenceLocked);
       })
       .catch(() => {});
   }, []);
@@ -57,7 +59,10 @@ const ElectiveSelection = () => {
   );
 
   const toggle = (id: string) => {
-    // Block changes if already submitted or deadline passed
+    if (preferenceLocked) {
+      toast.error("Your results have been announced. You cannot change preferences.");
+      return;
+    }
     if (submitted) return;
     if (deadline && new Date(deadline) < new Date()) {
       toast.error("The preference deadline has passed. You can no longer change your selections.");
@@ -74,6 +79,10 @@ const ElectiveSelection = () => {
   };
 
   const handleCheckout = () => {
+    if (preferenceLocked) {
+      toast.error("Your results have been announced. You cannot edit or submit preferences.");
+      return;
+    }
     if (selected.length < MIN_PREFS) {
       toast.error(`Select at least ${MIN_PREFS} preferences`);
       return;
@@ -101,6 +110,11 @@ const ElectiveSelection = () => {
 
   return (
     <DashboardLayout title="Elective Selection" subtitle="Choose your preferred electives">
+      {preferenceLocked && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-sm">
+          <strong>Results announced.</strong> You can no longer edit or submit preferences. Your allocation is final.
+        </div>
+      )}
       <button
         onClick={() => navigate("/dashboard/student")}
         className="btn-ghost flex items-center gap-2 mb-6"
@@ -152,7 +166,7 @@ const ElectiveSelection = () => {
               ))}
             </select>
           )}
-          {selected.length >= MIN_PREFS && (
+          {selected.length >= MIN_PREFS && !preferenceLocked && (
             <motion.button
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}

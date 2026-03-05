@@ -1,5 +1,8 @@
+import path from "path";
 import { config } from "dotenv";
-config();
+
+// Load .env from backend folder so it works even if server is run from project root
+config({ path: path.join(__dirname, "..", ".env") });
 
 import mongoose from "mongoose";
 import app from "./app";

@@ -6,7 +6,9 @@
     "dev": "ts-node-dev --respawn --transpile-only src/server.ts",
     "build": "tsc",
     "start": "node dist/server.js",
-    "seed:test-students": "ts-node-dev src/seed/seedTestStudents.ts"
+    "seed:test-students": "ts-node-dev src/seed/seedTestStudents.ts",
+    "seed:200": "ts-node -r dotenv/config src/seed/seed200CseEce.ts",
+    "seed:200-31": "ts-node -r dotenv/config src/seed/seed200CseEce31.ts"
   },
   "keywords": [],
   "author": "",

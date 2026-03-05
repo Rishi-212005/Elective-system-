@@ -128,9 +128,13 @@ router.get("/me/preferences", async (req: AuthedRequest, res) => {
   const profile = await StudentProfile.findOne({ userId: user._id }).select("department semester cgpa backlogs profileCompleted");
   if (!profile) return res.status(404).json({ message: "Student profile not found" });
 
+  // If results are announced for this student, preferences are locked (no edit/submit)
+  const announcedAllocation = await Allocation.findOne({ studentUserId: user._id, announced: true }).select("_id").lean();
+  const preferenceLocked = !!announcedAllocation;
+
   const pref = await Preference.findOne({ studentUserId: user._id });
   if (!pref) {
-    return res.json({ status: "none", preferences: [], deadline: null });
+    return res.json({ status: "none", preferences: [], deadline: null, preferenceLocked });
   }
 
   const deadline = await getCurrentPreferenceDeadline({
@@ -157,6 +161,7 @@ router.get("/me/preferences", async (req: AuthedRequest, res) => {
     preferences: pref.preferences,
     updatedAt: pref.updatedAt ?? null,
     deadline: deadline,
+    preferenceLocked,
   });
 });
 
@@ -176,6 +181,11 @@ function hasDuplicates<T>(arr: T[]) {
 router.put("/me/preferences", async (req: AuthedRequest, res) => {
   const user = await User.findById(req.auth!.userId).select("_id username name");
   if (!user) return res.status(404).json({ message: "User not found" });
+
+  const announced = await Allocation.findOne({ studentUserId: user._id, announced: true }).select("_id").lean();
+  if (announced) {
+    return res.status(400).json({ message: "Your results have been announced. You cannot change preferences." });
+  }
 
   const profile = await StudentProfile.findOne({ userId: user._id }).select(
     "profileCompleted department semester cgpa backlogs"
@@ -240,6 +250,11 @@ router.put("/me/preferences", async (req: AuthedRequest, res) => {
 router.post("/me/preferences/submit", async (req: AuthedRequest, res) => {
   const user = await User.findById(req.auth!.userId).select("_id username name");
   if (!user) return res.status(404).json({ message: "User not found" });
+
+  const announced = await Allocation.findOne({ studentUserId: user._id, announced: true }).select("_id").lean();
+  if (announced) {
+    return res.status(400).json({ message: "Your results have been announced. You cannot submit preferences." });
+  }
 
   const profile = await StudentProfile.findOne({ userId: user._id }).select(
     "profileCompleted department semester cgpa backlogs"

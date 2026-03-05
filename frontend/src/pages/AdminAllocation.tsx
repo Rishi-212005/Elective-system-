@@ -4,7 +4,7 @@ import { Play, Users, CheckCircle, XCircle, Filter, Search, Lock, RotateCcw, Meg
 import DashboardLayout from "@/components/DashboardLayout";
 import StatCard from "@/components/StatCard";
 import { toast } from "sonner";
-import { getAdminStudents, runAllocation, announceAllocationResults, resetAllocationOnServer } from "@/api/admin";
+import { getAdminStudents, runAllocation, announceAllocationResults, resetAllocationOnServer, getAdminDataSummary } from "@/api/admin";
 
 const branchesFromStudents = (students: ReturnType<typeof useState>[0]) =>
   ["All", ...Array.from(new Set(students.map((s: any) => s.department)))];
@@ -14,19 +14,27 @@ const semestersFromStudents = (students: ReturnType<typeof useState>[0]) =>
 const AdminAllocation = () => {
   const [branch, setBranch] = useState("All");
   const [semester, setSemester] = useState("All");
+  const [statusFilter, setStatusFilter] = useState<"All" | "Pending" | "Allocated" | "Announced">("All");
   const [search, setSearch] = useState("");
   const [isRunning, setIsRunning] = useState(false);
   const [currentRound, setCurrentRound] = useState(0);
   const [allocationDone, setAllocationDone] = useState(false);
   const [resultsAnnounced, setResultsAnnounced] = useState(false);
   const [students, setStudents] = useState<
-    { id: string; rollNumber: string; name: string; department: string; semester: number; cgpa: number; backlogs: number; preferences: string[]; allocatedElective: string | null }[]
+    { id: string; rollNumber: string; name: string; department: string; semester: number; cgpa: number; backlogs: number; preferences: string[]; allocatedElective: string | null; allocationStatus?: string; announced?: boolean }[]
   >([]);
   const [branches, setBranches] = useState<string[]>(["All"]);
   const [semesters, setSemesters] = useState<string[]>(["All"]);
   const [rounds, setRounds] = useState<
     { round: number; allocated: number; unallocated: number; description: string }[]
   >([]);
+  const [dataSummary, setDataSummary] = useState<{
+    submittedStudents: number;
+    allocatedInDb: number;
+    officialCgpaRecords: number;
+    flaggedExcluded: number;
+    unallocatedApprox: number;
+  } | null>(null);
 
   useEffect(() => {
     getAdminStudents()
@@ -40,18 +48,28 @@ const AdminAllocation = () => {
         setBranches(["All"]);
         setSemesters(["All"]);
       });
+    getAdminDataSummary()
+      .then(setDataSummary)
+      .catch(() => setDataSummary(null));
   }, []);
 
   const filtered = useMemo(() => {
     return students.filter((s) => {
       if (branch !== "All" && s.department !== branch) return false;
       if (semester !== "All" && String(s.semester) !== semester) return false;
+      if (statusFilter !== "All") {
+        const announced = !!(s as any).announced;
+        const status = (s as any).allocationStatus;
+        if (statusFilter === "Announced" && !announced) return false;
+        if (statusFilter === "Allocated" && (announced || status !== "allocated")) return false;
+        if (statusFilter === "Pending" && (status === "allocated" || announced)) return false;
+      }
       if (search && !s.name.toLowerCase().includes(search.toLowerCase()) && !s.rollNumber.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [students, branch, semester, search]);
+  }, [students, branch, semester, statusFilter, search]);
 
-  const allocated = filtered.filter((s) => s.allocatedElective).length;
+  const allocated = filtered.filter((s) => (s as any).allocationStatus === "allocated").length;
   const unallocated = filtered.length - allocated;
 
   const handleRunAllocation = async () => {
@@ -93,6 +111,7 @@ const AdminAllocation = () => {
       setStudents(rows);
       setBranches(branchesFromStudents(rows));
       setSemesters(semestersFromStudents(rows));
+      getAdminDataSummary().then(setDataSummary).catch(() => {});
 
       toast.success("AI Allocation completed successfully!");
     } catch (e: any) {
@@ -113,6 +132,7 @@ const AdminAllocation = () => {
         setStudents(rows);
         setBranches(branchesFromStudents(rows));
         setSemesters(semestersFromStudents(rows));
+        getAdminDataSummary().then(setDataSummary).catch(() => {});
         setCurrentRound(0);
         setAllocationDone(false);
         setRounds([]);
@@ -146,6 +166,25 @@ const AdminAllocation = () => {
         <StatCard title="Unallocated" value={unallocated} icon={<XCircle size={18} />} description="Pending" delay={0.2} />
         <StatCard title="Rounds" value={`${currentRound}/${rounds.length || 1}`} icon={<Play size={18} />} description={isRunning ? "Running..." : allocationDone ? "Complete" : "Ready"} delay={0.3} />
       </div>
+
+      {/* Database summary: confirm recently added students & allocation are stored in MongoDB */}
+      {dataSummary !== null && (
+        <motion.div
+          initial={{ opacity: 0, y: 10 }}
+          animate={{ opacity: 1, y: 0 }}
+          className="mb-6 p-4 rounded-xl bg-primary/5 border border-primary/20"
+        >
+          <h4 className="text-xs font-semibold text-foreground mb-3">Database stored (MongoDB)</h4>
+          <div className="flex flex-wrap gap-4 text-sm">
+            <span><strong>Submitted students:</strong> {dataSummary.submittedStudents}</span>
+            <span><strong>Allocated (this run):</strong> <span className="text-emerald-600">{dataSummary.allocatedInDb}</span></span>
+            <span><strong>Official CGPA records (CSV):</strong> {dataSummary.officialCgpaRecords}</span>
+            <span><strong>Flagged excluded:</strong> {dataSummary.flaggedExcluded}</span>
+            <span><strong>Unallocated (approx):</strong> {dataSummary.unallocatedApprox}</span>
+          </div>
+          <p className="text-[11px] text-muted-foreground mt-2">Recently added students and allocation results are persisted in the database.</p>
+        </motion.div>
+      )}
 
       {/* Controls */}
       <div className="flex flex-wrap gap-3 mb-6">
@@ -212,7 +251,13 @@ const AdminAllocation = () => {
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search students..." className="input-field pl-9 w-full" />
         </div>
-        <div className="flex gap-3">
+        <div className="flex flex-wrap gap-3">
+          <select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value as any)} className="input-field appearance-none cursor-pointer text-sm min-w-[140px]" title="Filter by allocation status">
+            <option value="All">All statuses</option>
+            <option value="Pending">Pending</option>
+            <option value="Allocated">Allocated (this run)</option>
+            <option value="Announced">Announced</option>
+          </select>
           <select value={branch} onChange={(e) => setBranch(e.target.value)} className="input-field appearance-none cursor-pointer text-sm min-w-[140px]">
             {branches.map((b) => <option key={b} value={b}>{b === "All" ? "All Branches" : b}</option>)}
           </select>

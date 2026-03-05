@@ -49,7 +49,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setUser({ id: res.id, name: res.name, role: res.role });
       return { ok: true as const };
     } catch (e: any) {
-      return { ok: false as const, message: e?.message || "Login failed" };
+      const msg = e?.message || "Login failed";
+      return { ok: false as const, message: msg };
     }
   };
 

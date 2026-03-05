@@ -1,8 +1,34 @@
 import { useEffect, useMemo, useState } from "react";
 import { motion } from "framer-motion";
-import { Users, Search, Filter } from "lucide-react";
+import { Users, Search, Filter, ArrowDownAZ } from "lucide-react";
 import DashboardLayout from "@/components/DashboardLayout";
 import { getAdminStudents, getAdminElectives } from "@/api/admin";
+
+type AllocatedRow = {
+  id: string;
+  rollNumber: string;
+  name: string;
+  department: string;
+  semester: number;
+  cgpa: number;
+  backlogs: number;
+  preferences: string[];
+  allocatedElective: string | null;
+  allocatedElectiveCode: string | null;
+  roundAllocated: number | null;
+  allocationStatus: "allocated" | "unallocated" | "pending";
+  announcedAt?: string | null;
+};
+
+const formatAnnouncedAt = (s: string | null | undefined) => {
+  if (!s) return "—";
+  try {
+    const d = new Date(s);
+    return isNaN(d.getTime()) ? "—" : d.toLocaleDateString(undefined, { dateStyle: "medium" }) + " " + d.toLocaleTimeString(undefined, { timeStyle: "short" });
+  } catch {
+    return "—";
+  }
+};
 
 const AdminAllocatedStudents = () => {
   const [branch, setBranch] = useState("All");
@@ -10,27 +36,13 @@ const AdminAllocatedStudents = () => {
   const [search, setSearch] = useState("");
   const [round, setRound] = useState<"All" | "1" | "2" | "3" | "4">("All");
   const [electiveCode, setElectiveCode] = useState("All");
-  const [students, setStudents] = useState<
-    {
-      id: string;
-      rollNumber: string;
-      name: string;
-      department: string;
-      semester: number;
-      cgpa: number;
-      backlogs: number;
-      preferences: string[];
-      allocatedElective: string | null;
-      allocatedElectiveCode: string | null;
-      roundAllocated: number | null;
-      allocationStatus: "allocated" | "unallocated" | "pending";
-    }[]
-  >([]);
+  const [sortBy, setSortBy] = useState<"recent" | "oldest">("recent");
+  const [students, setStudents] = useState<AllocatedRow[]>([]);
   const [electives, setElectives] = useState<{ code: string; name: string }[]>([]);
 
   useEffect(() => {
     getAdminStudents()
-      .then((rows) => setStudents(rows.filter((s) => s.allocationStatus === "allocated")))
+      .then((rows) => setStudents(rows.filter((s) => s.allocationStatus === "allocated") as AllocatedRow[]))
       .catch(() => setStudents([]));
 
     getAdminElectives()
@@ -48,7 +60,7 @@ const AdminAllocatedStudents = () => {
   );
 
   const filtered = useMemo(() => {
-    return students.filter((s) => {
+    const list = students.filter((s) => {
       if (branch !== "All" && s.department !== branch) return false;
       if (semester !== "All" && String(s.semester) !== semester) return false;
       if (round !== "All" && String(s.roundAllocated ?? "") !== round) return false;
@@ -56,7 +68,14 @@ const AdminAllocatedStudents = () => {
       if (search && !s.name.toLowerCase().includes(search.toLowerCase()) && !s.rollNumber.toLowerCase().includes(search.toLowerCase())) return false;
       return true;
     });
-  }, [students, branch, semester, round, electiveCode, search]);
+    const sorted = [...list].sort((a, b) => {
+      const ta = a.announcedAt ? new Date(a.announcedAt).getTime() : 0;
+      const tb = b.announcedAt ? new Date(b.announcedAt).getTime() : 0;
+      if (sortBy === "recent") return tb - ta;
+      return ta - tb;
+    });
+    return sorted;
+  }, [students, branch, semester, round, electiveCode, search, sortBy]);
 
   return (
     <DashboardLayout title="Allocated Students" subtitle="View allocated students by round and elective">
@@ -98,6 +117,13 @@ const AdminAllocatedStudents = () => {
               ))}
             </select>
           </div>
+          <div className="relative flex items-center gap-1.5">
+            <ArrowDownAZ size={14} className="text-muted-foreground shrink-0" />
+            <select value={sortBy} onChange={(e) => setSortBy(e.target.value as "recent" | "oldest")} className="input-field pl-2 pr-8 appearance-none cursor-pointer text-sm min-w-[160px]" title="Sort by announcement date">
+              <option value="recent">Most recent first</option>
+              <option value="oldest">Oldest first</option>
+            </select>
+          </div>
         </div>
       </div>
 
@@ -121,6 +147,7 @@ const AdminAllocatedStudents = () => {
                 <th className="text-left px-3 sm:px-5 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground hidden sm:table-cell">Backlogs</th>
                 <th className="text-left px-3 sm:px-5 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Round</th>
                 <th className="text-left px-3 sm:px-5 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Elective</th>
+                <th className="text-left px-3 sm:px-5 py-3 font-semibold text-xs uppercase tracking-wider text-muted-foreground">Announced at</th>
               </tr>
             </thead>
             <tbody>
@@ -140,6 +167,7 @@ const AdminAllocatedStudents = () => {
                       {s.allocatedElectiveCode ? `${s.allocatedElectiveCode} · ` : ""}{s.allocatedElective}
                     </span>
                   </td>
+                  <td className="px-3 sm:px-5 py-3 text-muted-foreground text-xs whitespace-nowrap">{formatAnnouncedAt(s.announcedAt)}</td>
                 </tr>
               ))}
             </tbody>

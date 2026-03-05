@@ -35,6 +35,8 @@ export type AdminStudentRow = {
   allocatedElectiveCode: string | null;
   roundAllocated: number | null;
   allocationStatus: "allocated" | "unallocated" | "pending";
+  announced?: boolean;
+  announcedAt?: string | null;
   submittedAt?: string | null;
 };
 
@@ -45,8 +47,42 @@ export type RunAllocationResponse = {
   rounds: { label: string; allocated: number; unallocated: number }[];
 };
 
+export type CgpaFlagRow = {
+  id: string;
+  rollNumber: string;
+  name: string;
+  department: string;
+  semester: number;
+  semesterSlot: string;
+  cgpaEntered: number;
+  cgpaOfficial: number;
+  sourceBatch: string;
+  status: "open" | "resolved";
+  createdAt: string;
+};
+
+export type CgpaVerifyResponse = {
+  totalChecked: number;
+  matched: number;
+  flagged: number;
+  missingOfficial: number;
+  flags: CgpaFlagRow[];
+};
+
 export function getAdminStats() {
   return apiFetch<AdminStats>("/admin/stats", { auth: true });
+}
+
+export type AdminDataSummary = {
+  submittedStudents: number;
+  allocatedInDb: number;
+  officialCgpaRecords: number;
+  flaggedExcluded: number;
+  unallocatedApprox: number;
+};
+
+export function getAdminDataSummary() {
+  return apiFetch<AdminDataSummary>("/admin/data-summary", { auth: true });
 }
 
 export function getAdminElectives() {
@@ -96,6 +132,66 @@ export function announceAllocationResults() {
 
 export function resetAllocationOnServer() {
   return apiFetch<{ deleted: number }>("/allocation/reset", {
+    method: "POST",
+    auth: true,
+  });
+}
+
+export function uploadOfficialCgpaSnapshots(input: {
+  semesterSlot: string;
+  department: string;
+  batchLabel: string;
+  rows: { rollNumber: string; name: string; cgpaOfficial: number }[];
+}) {
+  return apiFetch<{ count: number }>("/admin/cgpa-snapshots/upload", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify(input),
+  });
+}
+
+export function getCgpaSnapshotsSummary() {
+  return apiFetch<{ summary: { department: string; semesterSlot: string; count: number }[] }>(
+    "/admin/cgpa-snapshots/summary",
+    { auth: true }
+  );
+}
+
+export function runCgpaVerification(input: {
+  semesterSlot: string;
+  department: string;
+}) {
+  return apiFetch<CgpaVerifyResponse>("/admin/cgpa-verify/run", {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify(input),
+  });
+}
+
+export function getCgpaFlags(params: {
+  department?: string;
+  semesterSlot?: string;
+  status?: "open" | "resolved";
+}) {
+  const search = new URLSearchParams();
+  if (params.department) search.set("department", params.department);
+  if (params.semesterSlot) search.set("semesterSlot", params.semesterSlot);
+  if (params.status) search.set("status", params.status);
+  const query = search.toString();
+  const url = `/admin/cgpa-flags${query ? `?${query}` : ""}`;
+  return apiFetch<CgpaFlagRow[]>(url, { auth: true });
+}
+
+export function resolveCgpaFlag(id: string, notes?: string) {
+  return apiFetch<{ id: string; status: string }>(`/admin/cgpa-flags/${id}/resolve`, {
+    method: "POST",
+    auth: true,
+    body: JSON.stringify({ notes }),
+  });
+}
+
+export function forwardCgpaFlag(id: string) {
+  return apiFetch<{ ok: boolean }>(`/admin/cgpa-flags/${id}/forward`, {
     method: "POST",
     auth: true,
   });

@@ -27,6 +27,7 @@ import {
   Plus,
   Play,
   Download,
+  AlertTriangle,
 } from "lucide-react";
 
 interface NavItem {
@@ -48,12 +49,14 @@ const adminNav: NavItem[] = [
   { title: "Students", url: "/admin/students", icon: Users },
   { title: "Allocation", url: "/admin/allocation", icon: ListChecks },
   { title: "Allocated Students", url: "/admin/allocated-students", icon: Award },
+  { title: "CGPA Verification", url: "/admin/cgpa-verification", icon: ListChecks },
   { title: "Analytics", url: "/analytics", icon: BarChart3 },
 ];
 
 const facultyNav: NavItem[] = [
   { title: "Dashboard", url: "/dashboard/faculty", icon: LayoutDashboard },
   { title: "Allocated Students", url: "/dashboard/faculty/allocated", icon: Users },
+  { title: "Flagged Students", url: "/dashboard/faculty/flags", icon: AlertTriangle },
 ];
 
 const getNavItems = (role: UserRole): NavItem[] => {

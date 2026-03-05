@@ -3,6 +3,7 @@ import { requireAuth, requireRole, type AuthedRequest } from "../middleware/auth
 import { Preference } from "../models/Preference";
 import { Allocation } from "../models/Allocation";
 import { Elective } from "../models/Elective";
+import { CgpaFlag } from "../models/CgpaFlag";
 
 const router = Router();
 
@@ -83,6 +84,47 @@ router.get("/students", async (_req: AuthedRequest, res) => {
     .filter(Boolean);
 
   return res.json(rows);
+});
+
+// CGPA flags for this department
+router.get("/cgpa-flags", async (_req: AuthedRequest, res) => {
+  const flags = await CgpaFlag.find({
+    department: FACULTY_DEPARTMENT,
+    status: "open",
+  })
+    .sort({ createdAt: -1 })
+    .lean();
+
+  return res.json(
+    flags.map((f) => ({
+      id: f._id,
+      rollNumber: f.rollNumber,
+      name: f.name,
+      semester: f.semester,
+      semesterSlot: f.semesterSlot,
+      cgpaEntered: f.cgpaEntered,
+      cgpaOfficial: f.cgpaOfficial,
+      createdAt: f.createdAt,
+      sourceBatch: f.sourceBatch,
+    }))
+  );
+});
+
+router.post("/cgpa-flags/:id/resolve", async (req: AuthedRequest, res) => {
+  const { notes } = (req.body ?? {}) as { notes?: string };
+  const updated = await CgpaFlag.findOneAndUpdate(
+    { _id: req.params.id, department: FACULTY_DEPARTMENT },
+    {
+      $set: {
+        status: "resolved",
+        notes: notes ?? "Resolved by faculty",
+      },
+    },
+    { new: true }
+  );
+
+  if (!updated) return res.status(404).json({ message: "Flag not found" });
+  return res.json({ id: updated._id, status: updated.status });
 });
 
 export default router;

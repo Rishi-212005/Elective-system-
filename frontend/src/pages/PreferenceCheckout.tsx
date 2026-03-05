@@ -15,6 +15,7 @@ const PreferenceCheckout = () => {
   const [resolvedSelected, setResolvedSelected] = useState<string[]>(selectedIds);
   const [deadline, setDeadline] = useState<string | null | undefined>(undefined);
   const [status, setStatus] = useState<"none" | "draft" | "submitted">("none");
+  const [preferenceLocked, setPreferenceLocked] = useState(false);
 
   useEffect(() => {
     getElectives().then(setElectives).catch(() => setElectives([]));
@@ -24,6 +25,7 @@ const PreferenceCheckout = () => {
         .then((p) => {
           setStatus(p.status);
           setDeadline(p.deadline ?? null);
+          setPreferenceLocked(!!p.preferenceLocked);
           if (p.status !== "none") {
             const ordered = p.preferences.slice().sort((a, b) => a.rank - b.rank).map((x) => x.electiveLegacyId);
             setResolvedSelected(ordered);
@@ -31,11 +33,11 @@ const PreferenceCheckout = () => {
         })
         .catch(() => {});
     } else {
-      // still fetch deadline/status for cases coming from selection page
       getStudentPreferences()
         .then((p) => {
           setStatus(p.status);
           setDeadline(p.deadline ?? null);
+          setPreferenceLocked(!!p.preferenceLocked);
         })
         .catch(() => {});
     }
@@ -47,6 +49,10 @@ const PreferenceCheckout = () => {
   );
 
   const handleSave = async () => {
+    if (preferenceLocked) {
+      toast.error("Your results have been announced. You cannot save or change preferences.");
+      return;
+    }
     if (deadline && new Date(deadline) < new Date()) {
       toast.error("The preference deadline has passed. You can no longer save or change your draft.");
       return;
@@ -66,6 +72,10 @@ const PreferenceCheckout = () => {
   };
 
   const handleSubmit = async () => {
+    if (preferenceLocked) {
+      toast.error("Your results have been announced. You cannot submit preferences.");
+      return;
+    }
     if (deadline && new Date(deadline) < new Date()) {
       toast.error("The preference deadline has passed. You can no longer submit preferences.");
       return;
@@ -103,6 +113,11 @@ const PreferenceCheckout = () => {
 
   return (
     <DashboardLayout title="Preference Checkout" subtitle="Review and confirm your selections">
+      {preferenceLocked && (
+        <div className="mb-6 p-4 rounded-xl bg-amber-500/10 border border-amber-500/30 text-amber-800 dark:text-amber-200 text-sm">
+          <strong>Results announced.</strong> You can no longer edit or submit preferences. Your allocation is final.
+        </div>
+      )}
       <button
         onClick={() => navigate("/elective-selection")}
         className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors"
@@ -188,7 +203,9 @@ const PreferenceCheckout = () => {
           <div>
             <span className="text-xs text-muted-foreground block">Status</span>
             <span className="font-bold">
-              {status === "submitted" ? (
+              {preferenceLocked ? (
+                <span className="text-amber-600">Locked (Results announced)</span>
+              ) : status === "submitted" ? (
                 <span className="text-emerald-600">Submitted</span>
               ) : deadline && new Date(deadline) < new Date() ? (
                 <span className="text-destructive">Locked</span>
@@ -200,32 +217,34 @@ const PreferenceCheckout = () => {
         </div>
       </motion.div>
 
-      {/* Action Buttons */}
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        animate={{ opacity: 1, y: 0 }}
-        transition={{ delay: 0.4 }}
-        className="flex flex-col sm:flex-row gap-3"
-      >
-        <button
-          onClick={() => navigate("/elective-selection")}
-          className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all flex-1"
+      {/* Action Buttons - hidden when results announced */}
+      {!preferenceLocked && (
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.4 }}
+          className="flex flex-col sm:flex-row gap-3"
         >
-          <Edit3 size={16} /> Edit Selections
-        </button>
-        <button
-          onClick={handleSave}
-          className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-secondary/10 border border-secondary/20 text-secondary text-sm font-bold hover:bg-secondary/20 transition-all flex-1"
-        >
-          <Save size={16} /> Save Draft
-        </button>
-        <button
-          onClick={handleSubmit}
-          className="btn-primary flex items-center justify-center gap-2 flex-1"
-        >
-          <Send size={16} /> Submit Preferences
-        </button>
-      </motion.div>
+          <button
+            onClick={() => navigate("/elective-selection")}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl border border-border text-sm font-semibold text-muted-foreground hover:text-foreground hover:bg-muted/50 transition-all flex-1"
+          >
+            <Edit3 size={16} /> Edit Selections
+          </button>
+          <button
+            onClick={handleSave}
+            className="flex items-center justify-center gap-2 px-5 py-3 rounded-xl bg-secondary/10 border border-secondary/20 text-secondary text-sm font-bold hover:bg-secondary/20 transition-all flex-1"
+          >
+            <Save size={16} /> Save Draft
+          </button>
+          <button
+            onClick={handleSubmit}
+            className="btn-primary flex items-center justify-center gap-2 flex-1"
+          >
+            <Send size={16} /> Submit Preferences
+          </button>
+        </motion.div>
+      )}
     </DashboardLayout>
   );
 };

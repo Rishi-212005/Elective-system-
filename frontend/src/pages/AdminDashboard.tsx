@@ -11,7 +11,7 @@ import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell,
 } from "recharts";
 import { toast } from "sonner";
-import { getAdminElectives, getAdminStats, getAdminStudents } from "@/api/admin";
+import { getAdminElectives, getAdminStats, getAdminStudents, uploadOfficialCgpaSnapshots } from "@/api/admin";
 
 const CHART_COLORS = ["#3b82f6", "#6366f1", "#8b5cf6", "#06b6d4", "#10b981", "#f59e0b", "#ef4444", "#ec4899"];
 
@@ -34,6 +34,9 @@ const AdminDashboard = () => {
   const [students, setStudents] = useState<
     { id: string; rollNumber: string; name: string; department: string; semester: number; cgpa: number; backlogs: number; preferences: string[]; allocatedElective: string | null }[]
   >([]);
+  const [csvSemester, setCsvSemester] = useState("3-1");
+  const [csvDepartment, setCsvDepartment] = useState("Computer Science");
+  const [csvFile, setCsvFile] = useState<File | null>(null);
 
   useEffect(() => {
     getAdminElectives()
@@ -116,9 +119,40 @@ const AdminDashboard = () => {
     toast.success("Elective deleted.");
   };
 
-  const handleCsvUpload = () => {
-    toast.success("CSV file imported successfully! (UI demo)");
-    setShowCsvModal(false);
+  const handleCsvUpload = async () => {
+    if (!csvFile) {
+      toast.error("Please choose a CSV file first");
+      return;
+    }
+    try {
+      const text = await csvFile.text();
+      const lines = text.split(/\r?\n/).filter((l) => l.trim().length > 0);
+      const rows: { rollNumber: string; name: string; cgpaOfficial: number }[] = [];
+      for (let i = 1; i < lines.length; i += 1) {
+        const [rollNumber, name, cgpa] = lines[i].split(",").map((s) => s.trim());
+        if (!rollNumber || !name || !cgpa) continue;
+        const num = Number(cgpa);
+        if (Number.isNaN(num)) continue;
+        rows.push({ rollNumber, name, cgpaOfficial: num });
+      }
+      if (!rows.length) {
+        toast.error("No valid rows found in CSV");
+        return;
+      }
+
+      const batchLabel = `${csvDepartment} · ${csvSemester}`;
+      await uploadOfficialCgpaSnapshots({
+        semesterSlot: csvSemester,
+        department: csvDepartment,
+        batchLabel,
+        rows,
+      });
+      toast.success(`Imported CGPA sheet for ${batchLabel}`);
+      setShowCsvModal(false);
+      setCsvFile(null);
+    } catch (e: any) {
+      toast.error(e?.message || "Failed to import CSV");
+    }
   };
 
   return (
@@ -312,16 +346,50 @@ const AdminDashboard = () => {
                 <h3 className="font-display font-bold text-lg text-foreground">CSV Bulk Upload</h3>
                 <button onClick={() => setShowCsvModal(false)} className="p-2 rounded-xl hover:bg-muted transition-colors"><X size={16} className="text-muted-foreground" /></button>
               </div>
-              <div className="p-5 sm:p-6">
-                <div className="border-2 border-dashed border-border rounded-2xl p-8 text-center mb-4 hover:border-primary/40 transition-colors cursor-pointer">
-                  <Upload size={32} className="mx-auto text-muted-foreground mb-3" />
-                  <p className="text-sm font-semibold text-foreground mb-1">Drop CSV file here</p>
-                  <p className="text-xs text-muted-foreground">or click to browse</p>
+              <div className="p-5 sm:p-6 space-y-4">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground mb-1.5">Semester slot</label>
+                    <select value={csvSemester} onChange={(e) => setCsvSemester(e.target.value)} className="input-field text-sm">
+                      <option value="3-1">3-1</option>
+                      <option value="3-2">3-2</option>
+                      <option value="4-1">4-1</option>
+                      <option value="4-2">4-2</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-semibold text-foreground mb-1.5">Department</label>
+                    <select value={csvDepartment} onChange={(e) => setCsvDepartment(e.target.value)} className="input-field text-sm">
+                      <option value="Computer Science">Computer Science</option>
+                      <option value="Electronics">Electronics</option>
+                      <option value="Mechanical">Mechanical</option>
+                      <option value="Information Technology">Information Technology</option>
+                    </select>
+                  </div>
                 </div>
-                <p className="text-xs text-muted-foreground mb-4">
-                  Supported: Students CSV (ID, Name, CGPA, Preferences) or Electives CSV (ID, Name, Seat Limit)
+                <div
+                  className="border-2 border-dashed border-border rounded-2xl p-8 text-center mb-2 hover:border-primary/40 transition-colors cursor-pointer"
+                  onClick={() => document.getElementById("csv-file-input")?.click()}
+                >
+                  <Upload size={32} className="mx-auto text-muted-foreground mb-3" />
+                  <p className="text-sm font-semibold text-foreground mb-1">
+                    {csvFile ? csvFile.name : "Drop CSV file here"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">or click to browse</p>
+                  <input
+                    id="csv-file-input"
+                    type="file"
+                    accept=".csv"
+                    className="hidden"
+                    onChange={(e) => setCsvFile(e.target.files?.[0] ?? null)}
+                  />
+                </div>
+                <p className="text-xs text-muted-foreground mb-2">
+                  Upload official <span className="font-semibold">students CGPA CSV</span> with columns:
+                  <span className="font-mono"> RollNumber, Name, CGPA</span>. These values are treated as
+                  the source of truth for verification.
                 </p>
-                <div className="flex gap-3">
+                <div className="flex gap-3 pt-1">
                   <button onClick={() => setShowCsvModal(false)} className="btn-secondary flex-1">Cancel</button>
                   <button onClick={handleCsvUpload} className="btn-primary flex-1">Import</button>
                 </div>

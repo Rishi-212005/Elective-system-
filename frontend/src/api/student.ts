@@ -25,6 +25,8 @@ export type StudentPreferencesResponse = {
   updatedAt?: string | null;
   preferences: Array<{ electiveLegacyId: string; rank: number }>;
   deadline?: string | null;
+  /** True when results are announced; student cannot edit or submit preferences */
+  preferenceLocked?: boolean;
 };
 
 export type StudentAllocationResponse =

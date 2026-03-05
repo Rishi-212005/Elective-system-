@@ -2,6 +2,7 @@ import { Types } from "mongoose";
 import { Preference } from "../models/Preference";
 import { Elective } from "../models/Elective";
 import { Allocation } from "../models/Allocation";
+import { CgpaFlag } from "../models/CgpaFlag";
 
 type AllocationResult = {
   allocatedStudents: { studentId: string; electiveId: string }[];
@@ -27,7 +28,13 @@ export async function runAllocationEngine(): Promise<AllocationResult> {
     }
   }
 
-  // 2. Fetch electives and initialise capacity map, subtracting seats already taken by announced students
+  // 2. Fetch flagged students whose CGPA is under investigation – they are excluded from allocation
+  const openFlags = await CgpaFlag.find({ status: "open" }).select("studentUserId").lean();
+  const flaggedStudentUserIds = new Set<string>(
+    openFlags.map((f) => (f.studentUserId as Types.ObjectId).toString())
+  );
+
+  // 3. Fetch electives and initialise capacity map, subtracting seats already taken by announced students
   const electives = await Elective.find({ isActive: true }).lean();
   const capacityByLegacyId = new Map<string, number>();
   const electiveByLegacyId = new Map<string, (typeof electives)[number]>();
@@ -39,13 +46,20 @@ export async function runAllocationEngine(): Promise<AllocationResult> {
     capacityByLegacyId.set(e.legacyId, remaining);
   });
 
-  // 3. Fetch submitted preferences only for students who do NOT yet have an announced allocation
+  // 4. Fetch submitted preferences only for students who:
+  //    - do NOT yet have an announced allocation
+  //    - do NOT have an open CGPA flag
   const prefs = await Preference.find({
     status: "submitted",
-    studentUserId: { $nin: Array.from(announcedStudentUserIds).map((id) => new Types.ObjectId(id)) },
+    studentUserId: {
+      $nin: [
+        ...Array.from(announcedStudentUserIds).map((id) => new Types.ObjectId(id)),
+        ...Array.from(flaggedStudentUserIds).map((id) => new Types.ObjectId(id)),
+      ],
+    },
   }).lean();
 
-  // If there are no new/pending students, still return current seat utilisation (based on announced only)
+  // If there are no new/pending students, still return current seat utilisation (based on announced + flagged exclusions)
   if (prefs.length === 0) {
     const seatUtilizationOnly = electives.map((e) => {
       const remaining = capacityByLegacyId.get(e.legacyId) ?? e.seatLimit;
